@@ -18,6 +18,7 @@ Run the checks locally with:
 
 ```shell
 npm ci
+npm run generate
 npm test
 ```
 

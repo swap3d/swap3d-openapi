@@ -10,6 +10,8 @@ API.
   endpoints.
 - Treat operation IDs and response fields as public compatibility boundaries.
 - Run `npm test` after changing the contract.
+- Run `npm run generate` after editing `openapi.yaml` and commit the resulting
+  `openapi.json`.
 - Use ASCII unless existing content requires otherwise.
 - Update `CHANGELOG.md` for behavior changes.
 

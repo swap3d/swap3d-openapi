@@ -34,8 +34,10 @@ npm ci
 npm test
 ```
 
-`npm test` lints the source contract and produces a bundled specification at
-`dist/openapi.yaml`.
+`npm test` lints the source contract, produces a bundled specification at
+`dist/openapi.yaml`, and confirms that the committed `openapi.json` artifact
+matches `openapi.yaml`. SDKs and contract checks should consume the generated
+JSON rather than maintaining another schema by hand.
 
 Pull requests are also checked for breaking changes with
 [oasdiff](https://github.com/oasdiff/oasdiff). Intentional breaking changes
