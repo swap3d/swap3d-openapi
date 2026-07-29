@@ -1,0 +1,414 @@
+openapi: 3.1.0
+info:
+  title: Swap3D Developer API
+  version: 0.1.0
+  description: |
+    Submit asynchronous 3D file conversion jobs, inspect their status, and
+    read API capabilities and monthly usage.
+
+    This contract covers the public API-key interface only. Dashboard,
+    authentication, billing, and internal operations endpoints are outside
+    its scope.
+  contact:
+    name: Swap3D Support
+    email: support@swap3d.studio
+    url: https://swap3d.studio
+  license:
+    name: Apache License 2.0
+    identifier: Apache-2.0
+servers:
+  - url: https://api.swap3d.studio/api/v1
+    description: Production
+tags:
+  - name: Capabilities
+    description: Supported formats and upload limits.
+  - name: Conversions
+    description: Asynchronous model conversion jobs.
+  - name: Usage
+    description: Monthly API usage and plan quota.
+paths:
+  /openapi/formats:
+    get:
+      operationId: getFormats
+      summary: Get supported formats
+      description: Returns machine-readable source formats, target formats, and the upload limit.
+      tags:
+        - Capabilities
+      security: []
+      responses:
+        "200":
+          description: Current conversion capabilities.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FormatsResponse"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /openapi/usage:
+    get:
+      operationId: getUsage
+      summary: Get monthly usage
+      description: Returns the authenticated API key owner's current plan and monthly conversion quota.
+      tags:
+        - Usage
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current monthly usage.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /openapi/convert:
+    post:
+      operationId: createConversion
+      summary: Submit a conversion
+      description: |
+        Uploads one source model and creates an asynchronous conversion job.
+        Poll the returned status URL until the job completes or fails.
+      tags:
+        - Conversions
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - file
+                - targetFormat
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: A supported 3D or CAD model up to 100 MB.
+                targetFormat:
+                  $ref: "#/components/schemas/TargetFormat"
+      responses:
+        "202":
+          description: Conversion accepted and queued.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversionAccepted"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          $ref: "#/components/responses/PaymentRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          description: The uploaded file exceeds the 100 MB limit.
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /openapi/convert/status/{jobId}:
+    get:
+      operationId: getConversionStatus
+      summary: Get conversion status
+      description: Returns the state and, when available, a short-lived download URL for a conversion job.
+      tags:
+        - Conversions
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: Current conversion state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversionStatus"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "410":
+          description: The converted output has expired.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpiredConversion"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Swap3D API key created in the dashboard.
+  parameters:
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      description: Conversion job identifier returned by `createConversion`.
+      schema:
+        type: string
+        minLength: 1
+  schemas:
+    TargetFormat:
+      type: string
+      description: Requested output format.
+      enum:
+        - gltf
+        - glb
+        - gltf2
+        - glb2
+    SourceExtension:
+      type: string
+      enum:
+        - obj
+        - glb
+        - gltf
+        - fbx
+        - dae
+        - stl
+        - ply
+        - 3ds
+        - blend
+        - step
+        - stp
+        - iges
+        - igs
+        - brep
+    FormatsResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - targetFormats
+        - sourceExtensions
+        - uploadLimitBytes
+      properties:
+        targetFormats:
+          type: array
+          items:
+            $ref: "#/components/schemas/TargetFormat"
+        sourceExtensions:
+          type: array
+          items:
+            $ref: "#/components/schemas/SourceExtension"
+        uploadLimitBytes:
+          type: integer
+          format: int64
+          minimum: 1
+          example: 104857600
+    Plan:
+      type: string
+      enum:
+        - free
+        - pro
+    UsageResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - usageCount
+        - limit
+        - remaining
+        - plan
+        - monthStart
+      properties:
+        usageCount:
+          type: integer
+          minimum: 0
+          example: 12
+        limit:
+          type: integer
+          minimum: 0
+          example: 100
+        remaining:
+          type: integer
+          minimum: 0
+          example: 88
+        plan:
+          $ref: "#/components/schemas/Plan"
+        monthStart:
+          type: string
+          format: date-time
+    ConversionAccepted:
+      type: object
+      additionalProperties: false
+      required:
+        - message
+        - jobId
+        - statusUrl
+      properties:
+        message:
+          type: string
+          example: Conversion started
+        jobId:
+          type: string
+          example: cm123456789
+        statusUrl:
+          type: string
+          example: /api/v1/openapi/convert/status/cm123456789
+    ConversionStatusValue:
+      type: string
+      enum:
+        - queued
+        - processing
+        - completed
+        - failed
+    ConversionResult:
+      type: object
+      additionalProperties: false
+      required:
+        - downloadUrl
+        - downloadUrlExpiresAt
+        - outputExpiresAt
+        - targetFormat
+      properties:
+        downloadUrl:
+          type: string
+          format: uri
+        downloadUrlExpiresAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        outputExpiresAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        targetFormat:
+          type: string
+          example: glb
+    ConversionStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+      properties:
+        status:
+          $ref: "#/components/schemas/ConversionStatusValue"
+        message:
+          type: string
+        result:
+          $ref: "#/components/schemas/ConversionResult"
+        error:
+          type: string
+    ExpiredConversion:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - error
+        - result
+      properties:
+        status:
+          type: string
+          const: expired
+        error:
+          $ref: "#/components/schemas/ErrorDetail"
+        result:
+          type: object
+          additionalProperties: false
+          required:
+            - targetFormat
+            - outputExpiresAt
+          properties:
+            targetFormat:
+              type: string
+              example: glb
+            outputExpiresAt:
+              type:
+                - string
+                - "null"
+              format: date-time
+    ErrorDetail:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          example: BAD_REQUEST
+        message:
+          type: string
+          example: The request is invalid.
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+      properties:
+        error:
+          $ref: "#/components/schemas/ErrorDetail"
+  responses:
+    BadRequest:
+      description: The request or uploaded model is invalid.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: The API key is missing, invalid, or revoked.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    PaymentRequired:
+      description: The monthly API quota has been reached.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: The account is not permitted to perform this operation.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: The conversion job does not exist or belongs to another account.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    TooManyRequests:
+      description: The request rate limit has been exceeded.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InternalError:
+      description: The request failed because of an internal service error.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ServiceUnavailable:
+      description: Conversion processing is temporarily unavailable.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
